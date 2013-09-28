@@ -128,10 +128,10 @@ type TableMap struct {
 	columns    []*ColumnMap
 	keys       []*ColumnMap
 	version    *ColumnMap
-	insertPlan bindPlan
-	updatePlan bindPlan
-	deletePlan bindPlan
-	getPlan    bindPlan
+	insertPlan map[string]bindPlan
+	updatePlan map[string]bindPlan
+	deletePlan map[string]bindPlan
+	getPlan    map[string]bindPlan
 	dbmap      *DbMap
 }
 
@@ -139,10 +139,10 @@ type TableMap struct {
 // associated with this TableMap.  Call this if you've modified
 // any column names or the table name itself.
 func (t *TableMap) ResetSql() {
-	t.insertPlan = bindPlan{}
-	t.updatePlan = bindPlan{}
-	t.deletePlan = bindPlan{}
-	t.getPlan = bindPlan{}
+	t.insertPlan = make(map[string]bindPlan)
+	t.updatePlan = make(map[string]bindPlan)
+	t.deletePlan = make(map[string]bindPlan)
+	t.getPlan = make(map[string]bindPlan)
 }
 
 // SetKeys lets you specify the fields on a struct that map to primary
@@ -267,7 +267,7 @@ type bindInstance struct {
 }
 
 func (t *TableMap) bindInsert(elem reflect.Value) (bindInstance, error) {
-	plan := t.insertPlan
+	plan := t.insertPlan[t.dbmap.Schema]
 	if plan.query == "" {
 		plan.autoIncrIdx = -1
 
@@ -314,14 +314,14 @@ func (t *TableMap) bindInsert(elem reflect.Value) (bindInstance, error) {
 		s.WriteString(";")
 
 		plan.query = s.String()
-		t.insertPlan = plan
+		t.insertPlan[t.dbmap.Schema] = plan
 	}
 
 	return plan.createBindInstance(elem, t.dbmap.TypeConverter)
 }
 
 func (t *TableMap) bindUpdate(elem reflect.Value) (bindInstance, error) {
-	plan := t.updatePlan
+	plan := t.updatePlan[t.dbmap.Schema]
 	if plan.query == "" {
 
 		s := bytes.Buffer{}
@@ -372,14 +372,14 @@ func (t *TableMap) bindUpdate(elem reflect.Value) (bindInstance, error) {
 		s.WriteString(";")
 
 		plan.query = s.String()
-		t.updatePlan = plan
+		t.updatePlan[t.dbmap.Schema] = plan
 	}
 
 	return plan.createBindInstance(elem, t.dbmap.TypeConverter)
 }
 
 func (t *TableMap) bindDelete(elem reflect.Value) (bindInstance, error) {
-	plan := t.deletePlan
+	plan := t.deletePlan[t.dbmap.Schema]
 	if plan.query == "" {
 
 		s := bytes.Buffer{}
@@ -418,14 +418,14 @@ func (t *TableMap) bindDelete(elem reflect.Value) (bindInstance, error) {
 		s.WriteString(";")
 
 		plan.query = s.String()
-		t.deletePlan = plan
+		t.deletePlan[t.dbmap.Schema] = plan
 	}
 
 	return plan.createBindInstance(elem, t.dbmap.TypeConverter)
 }
 
 func (t *TableMap) bindGet() bindPlan {
-	plan := t.getPlan
+	plan := t.getPlan[t.dbmap.Schema]
 	if plan.query == "" {
 
 		s := bytes.Buffer{}
@@ -459,7 +459,7 @@ func (t *TableMap) bindGet() bindPlan {
 		s.WriteString(";")
 
 		plan.query = s.String()
-		t.getPlan = plan
+		t.getPlan[t.dbmap.Schema] = plan
 	}
 
 	return plan
@@ -634,6 +634,7 @@ func (m *DbMap) AddTableWithName(i interface{}, name string) *TableMap {
 	}
 
 	tmap := &TableMap{gotype: t, TableName: name, dbmap: m}
+	tmap.ResetSql()
 	tmap.columns, tmap.version = readStructColumns(t)
 	m.tables = append(m.tables, tmap)
 
